@@ -29,9 +29,28 @@ class ProcessVideoRequest(BaseModel):
     source_video_id: Optional[str] = None
 
 
-image = (modal.Image.from_registry(
-    "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.11")
-    .apt_install(["ffmpeg", "libgl1-mesa-glx", "wget", "libcudnn8", "libcudnn8-dev", "pkg-config", "libavformat-dev", "libavcodec-dev", "libavdevice-dev", "libavutil-dev", "libswscale-dev", "libswresample-dev", "libavfilter-dev", "clang", "build-essential", "gcc", "git"])
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install([
+        "ffmpeg",
+        "fontconfig",
+        "libgl1-mesa-glx",
+        "libglib2.0-0",
+        "wget",
+        "pkg-config",
+        "libavformat-dev",
+        "libavcodec-dev",
+        "libavdevice-dev",
+        "libavutil-dev",
+        "libswscale-dev",
+        "libswresample-dev",
+        "libavfilter-dev",
+        "clang",
+        "build-essential",
+        "gcc",
+        "git",
+    ])
+    .pip_install("pip<25", "setuptools<70", "wheel")
     .pip_install_from_requirements("requirements.txt")
     .run_commands([
         "mkdir -p /usr/share/fonts/truetype/custom",
