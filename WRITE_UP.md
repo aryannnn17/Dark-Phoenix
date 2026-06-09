@@ -23,6 +23,8 @@ This submission keeps that path and adds a production YouTube path:
   duration, caption, and watermark metadata.
 - The frontend includes `.npmrc` with `legacy-peer-deps=true` so Vercel can
   install the existing React 19 plus `shadcn-dropzone` dependency set.
+- Stripe billing is optional for the review deployment; checkout UI is disabled
+  when Stripe is not configured and reviewer credits can be seeded directly.
 - `scripts/download_delivery_artifacts.py` downloads the S3 manifest and final
   MP4s into a local Google Drive handoff folder.
 

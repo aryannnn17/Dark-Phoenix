@@ -5,13 +5,15 @@ import Stripe from "stripe";
 import { env } from "~/env";
 import { db } from "~/server/db";
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-04-30.basil",
-});
-
-const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
-
 export async function POST(req: Request) {
+  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
+    return new NextResponse("Stripe is not configured", { status: 503 });
+  }
+
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+    apiVersion: "2025-04-30.basil",
+  });
+
   try {
     const body = await req.text();
     const signature = req.headers.get("stripe-signature") ?? "";
@@ -19,7 +21,11 @@ export async function POST(req: Request) {
     let event: Stripe.Event;
 
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = stripe.webhooks.constructEvent(
+        body,
+        signature,
+        env.STRIPE_WEBHOOK_SECRET,
+      );
     } catch (error) {
       console.error("Webhook signature verification failed", error);
       return new NextResponse("Webhook signature verification failed", {

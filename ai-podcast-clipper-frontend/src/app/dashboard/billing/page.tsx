@@ -1,10 +1,8 @@
-"use client";
-
 import type { VariantProps } from "class-variance-authority";
 import { ArrowLeftIcon, CheckIcon } from "lucide-react";
 import Link from "next/link";
-import { createCheckoutSession, type PriceId } from "~/actions/stripe";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { createCheckoutSession } from "~/actions/stripe";
+import { Button, type buttonVariants } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,6 +12,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import { isBillingConfigured, type PriceId } from "~/lib/billing";
 
 interface PricingPlan {
   title: string;
@@ -61,7 +60,15 @@ const plans: PricingPlan[] = [
   },
 ];
 
-function PricingCard({ plan }: { plan: PricingPlan }) {
+function PricingCard({
+  plan,
+  billingEnabled,
+}: {
+  plan: PricingPlan;
+  billingEnabled: boolean;
+}) {
+  const checkoutAction = createCheckoutSession.bind(null, plan.priceId);
+
   return (
     <Card
       className={cn(
@@ -95,12 +102,14 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
         </ul>
       </CardContent>
       <CardFooter>
-        <form
-          action={() => createCheckoutSession(plan.priceId)}
-          className="w-full"
-        >
-          <Button variant={plan.buttonVariant} className="w-full" type="submit">
-            {plan.buttonText}
+        <form action={checkoutAction} className="w-full">
+          <Button
+            variant={plan.buttonVariant}
+            className="w-full"
+            type="submit"
+            disabled={!billingEnabled}
+          >
+            {billingEnabled ? plan.buttonText : "Unavailable"}
           </Button>
         </form>
       </CardFooter>
@@ -109,6 +118,8 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
 }
 
 export default function BillingPage() {
+  const billingEnabled = isBillingConfigured();
+
   return (
     <div className="mx-auto flex flex-col space-y-8 px-4 py-12">
       <div className="relative flex items-center justify-center gap-4">
@@ -135,9 +146,23 @@ export default function BillingPage() {
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         {plans.map((plan) => (
-          <PricingCard key={plan.title} plan={plan} />
+          <PricingCard
+            key={plan.title}
+            plan={plan}
+            billingEnabled={billingEnabled}
+          />
         ))}
       </div>
+
+      {!billingEnabled && (
+        <div className="bg-muted/50 rounded-lg p-6">
+          <h3 className="mb-2 text-lg font-semibold">Billing disabled</h3>
+          <p className="text-muted-foreground text-sm">
+            Stripe is not configured for this deployment. Reviewer credits can
+            be seeded directly in the database.
+          </p>
+        </div>
+      )}
 
       <div className="bg-muted/50 rounded-lg p-6">
         <h3 className="mb-4 text-lg font-semibold">How credits work</h3>

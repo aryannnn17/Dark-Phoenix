@@ -43,6 +43,8 @@ ai-podcast-clipper-frontend/next-env.d.ts
 !**/.env.example
 
 # Backend (evo2-backend - Python/Modal)
+__pycache__/
+*.pyc
 ai-podcast-clipper-backend/__pycache__/
 ai-podcast-clipper-backend/*.pyc
 ai-podcast-clipper-backend/*.pyo

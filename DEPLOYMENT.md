@@ -33,12 +33,12 @@ development and for `setup_modal_secret.py`.
 | `PROCESS_VIDEO_ENDPOINT_AUTH` | Vercel | Must match Modal `AUTH_TOKEN`. |
 | `AUTH_TOKEN` | Modal secret | Bearer token checked by Modal. |
 | `GEMINI_API_KEY` | Modal secret | Used for moment selection. |
-| `STRIPE_SECRET_KEY` | Vercel | Test mode is acceptable. |
-| `STRIPE_WEBHOOK_SECRET` | Vercel | Test webhook secret. |
-| `STRIPE_SMALL_CREDIT_PACK` | Vercel | Test price ID. |
-| `STRIPE_MEDIUM_CREDIT_PACK` | Vercel | Test price ID. |
-| `STRIPE_LARGE_CREDIT_PACK` | Vercel | Test price ID. |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Vercel | Test publishable key. |
+| `STRIPE_SECRET_KEY` | Vercel | Optional; test mode is acceptable. |
+| `STRIPE_WEBHOOK_SECRET` | Vercel | Optional; test webhook secret. |
+| `STRIPE_SMALL_CREDIT_PACK` | Vercel | Optional; test price ID. |
+| `STRIPE_MEDIUM_CREDIT_PACK` | Vercel | Optional; test price ID. |
+| `STRIPE_LARGE_CREDIT_PACK` | Vercel | Optional; test price ID. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Vercel | Optional; test publishable key. |
 | `BASE_URL` | Vercel | The deployed frontend URL. |
 
 Do not commit real secrets.
@@ -58,6 +58,9 @@ npm run db:push
 Create a reviewer credentials account through the app signup flow or Prisma
 Studio, then set enough credits for the assigned run. Include the reviewer
 login only in the submission email.
+
+If Stripe is not configured, the app disables checkout UI and the reviewer path
+still works as long as this account has enough credits.
 
 ## S3
 

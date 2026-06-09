@@ -34,6 +34,7 @@ import { Label } from "./ui/label";
 export function DashboardClient({
   uploadedFiles,
   clips,
+  billingEnabled,
 }: {
   uploadedFiles: {
     id: string;
@@ -48,6 +49,7 @@ export function DashboardClient({
     createdAt: Date;
   }[];
   clips: Clip[];
+  billingEnabled: boolean;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -151,9 +153,15 @@ export function DashboardClient({
             Upload your podcast and get AI-generated clips instantly
           </p>
         </div>
-        <Link href="/dashboard/billing">
-          <Button>Buy Credits</Button>
-        </Link>
+        {billingEnabled ? (
+          <Link href="/dashboard/billing">
+            <Button>Buy Credits</Button>
+          </Link>
+        ) : (
+          <Button variant="outline" disabled>
+            Credits Seeded
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="upload">

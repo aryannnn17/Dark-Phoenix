@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { DashboardClient } from "~/components/dashboard-client";
+import { isBillingConfigured } from "~/lib/billing";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
@@ -58,6 +59,10 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <DashboardClient uploadedFiles={formattedFiles} clips={userData.clips} />
+    <DashboardClient
+      uploadedFiles={formattedFiles}
+      clips={userData.clips}
+      billingEnabled={isBillingConfigured()}
+    />
   );
 }
