@@ -12,7 +12,7 @@ Fill these after deployment:
 | Item | Value |
 | --- | --- |
 | Frontend URL | `https://YOUR_PROJECT.vercel.app` |
-| Modal endpoint | `https://YOUR_MODAL_ENDPOINT.modal.run` |
+| Modal endpoint | `https://aryannnn17--ai-podcast-clipper-aipodcastclipper-process-video.modal.run` |
 | Google Drive folder | `https://drive.google.com/...` |
 | Submitted tag | `submitted` |
 
