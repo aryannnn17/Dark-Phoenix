@@ -1,22 +1,41 @@
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
-import os
+import argparse
+import pathlib
+import subprocess
 
-url = "https://www.youtube.com/watch?v=SOG0GmKts_I"
 
-yt = YouTube(url, on_progress_callback=on_progress)
-print(yt.title)
+def download_youtube_video(url: str, output_path: pathlib.Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        "yt-dlp",
+        "--no-playlist",
+        "--max-filesize",
+        "2500M",
+        "-f",
+        "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/b",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        str(output_path),
+        url,
+    ]
+    subprocess.run(command, check=True)
 
-video_stream = yt.streams.filter(
-    res="1080p", file_extension="mp4", only_video=True).first()
-audio_stream = yt.streams.filter(
-    only_audio=True, file_extension="mp4").order_by('abr').desc().first()
 
-video_path = video_stream.download(filename="video.mp4")
-audio_path = audio_stream.download(filename="audio.mp4")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Download a YouTube video as an MP4 for Dark Phoenix diagnostics."
+    )
+    parser.add_argument("url", help="YouTube URL to download")
+    parser.add_argument(
+        "--output",
+        default="output_1080p.mp4",
+        help="Output MP4 path. Defaults to output_1080p.mp4.",
+    )
+    args = parser.parse_args()
 
-output_path = "output_1080p.mp4"
-os.system(
-    f'ffmpeg -y -i "{video_path}" -i "{audio_path}" -c:v copy -c:a aac "{output_path}"')
+    download_youtube_video(args.url, pathlib.Path(args.output))
+    print(f"Downloaded {args.url} to {args.output}")
 
-print(f"Downloaded and merged 1080p video to {output_path}")
+
+if __name__ == "__main__":
+    main()

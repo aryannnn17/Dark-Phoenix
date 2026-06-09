@@ -24,6 +24,10 @@ export default async function DashboardPage() {
           s3Key: true,
           displayName: true,
           status: true,
+          sourceType: true,
+          sourceUrl: true,
+          youtubeVideoId: true,
+          errorMessage: true,
           createdAt: true,
           _count: {
             select: {
@@ -43,8 +47,12 @@ export default async function DashboardPage() {
   const formattedFiles = userData.uploadedFiles.map((file) => ({
     id: file.id,
     s3Key: file.s3Key,
-    filename: file.displayName ?? "Unkown filename",
+    filename: file.displayName ?? "Unknown filename",
     status: file.status,
+    sourceType: file.sourceType,
+    sourceUrl: file.sourceUrl,
+    youtubeVideoId: file.youtubeVideoId,
+    errorMessage: file.errorMessage,
     clipsCount: file._count.clips,
     createdAt: file.createdAt,
   }));

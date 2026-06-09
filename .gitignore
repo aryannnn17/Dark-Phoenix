@@ -25,6 +25,7 @@ pnpm-debug.log*
 *.sublime-workspace
 
 *.mp4
+delivery/
 
 # Frontend (evo2-frontend - Next.js)
 ai-podcast-clipper-frontend/node_modules/

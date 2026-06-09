@@ -9,6 +9,9 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
 export async function processVideo(uploadedFileId: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
   const uploadedVideo = await db.uploadedFile.findUniqueOrThrow({
     where: {
       id: uploadedFileId,
@@ -17,14 +20,23 @@ export async function processVideo(uploadedFileId: string) {
       uploaded: true,
       id: true,
       userId: true,
+      sourceUrl: true,
+      youtubeVideoId: true,
     },
   });
+
+  if (uploadedVideo.userId !== session.user.id) throw new Error("Unauthorized");
 
   if (uploadedVideo.uploaded) return;
 
   await inngest.send({
     name: "process-video-events",
-    data: { uploadedFileId: uploadedVideo.id, userId: uploadedVideo.userId },
+    data: {
+      uploadedFileId: uploadedVideo.id,
+      userId: uploadedVideo.userId,
+      sourceUrl: uploadedVideo.sourceUrl,
+      youtubeVideoId: uploadedVideo.youtubeVideoId,
+    },
   });
 
   await db.uploadedFile.update({
@@ -73,7 +85,7 @@ export async function getClipPlayUrl(
     });
 
     return { succes: true, url: signedUrl };
-  } catch (error) {
+  } catch {
     return { succes: false, error: "Failed to generate play URL." };
   }
 }

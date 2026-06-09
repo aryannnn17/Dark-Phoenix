@@ -1,39 +1,87 @@
 """
-Dark Phoenix - Modal Secret Setup Script
-Run this script to create the required Modal secret.
+Create or update the persistent Modal secret used by Dark Phoenix.
 
-Usage: python setup_modal_secret.py
+Usage:
+    python setup_modal_secret.py
 
-This script reads credentials from environment variables (loaded from .env file)
-instead of hardcoding them.
+The script reads ../.env, maps PROCESS_VIDEO_ENDPOINT_AUTH to the backend's
+AUTH_TOKEN, and runs:
+    modal secret create --force --from-json <tempfile> ai-podcast-clipper-secret
 """
 
+import json
 import os
-import modal
+import pathlib
+import subprocess
+import tempfile
+
 from dotenv import load_dotenv
 
-# Load environment variables from the project-root .env file
-load_dotenv("../.env")
 
-# Create the secret with credentials from environment variables
-secret = modal.Secret.from_dict({
-    "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"),
-    "AUTH_TOKEN": os.getenv("PROCESS_VIDEO_ENDPOINT_AUTH"),
-    "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID"),
-    "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
-    "AWS_REGION": os.getenv("AWS_REGION"),
-    "S3_BUCKET_NAME": os.getenv("S3_BUCKET_NAME")
-})
+SECRET_NAME = "ai-podcast-clipper-secret"
+ENV_PATH = pathlib.Path(__file__).resolve().parent.parent / ".env"
+SECRET_KEYS = {
+    "GEMINI_API_KEY": "GEMINI_API_KEY",
+    "AUTH_TOKEN": "PROCESS_VIDEO_ENDPOINT_AUTH",
+    "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
+    "AWS_REGION": "AWS_REGION",
+    "S3_BUCKET_NAME": "S3_BUCKET_NAME",
+}
 
-print("Secret object created successfully!")
-print("")
-print("Loaded from environment variables:")
-print(f"  - GEMINI_API_KEY: {'✓ Set' if os.getenv('GEMINI_API_KEY') else '✗ Missing'}")
-print(f"  - AUTH_TOKEN: {'✓ Set' if os.getenv('PROCESS_VIDEO_ENDPOINT_AUTH') else '✗ Missing'}")
-print(f"  - AWS_ACCESS_KEY_ID: {'✓ Set' if os.getenv('AWS_ACCESS_KEY_ID') else '✗ Missing'}")
-print(f"  - AWS_SECRET_ACCESS_KEY: {'✓ Set' if os.getenv('AWS_SECRET_ACCESS_KEY') else '✗ Missing'}")
-print(f"  - AWS_REGION: {'✓ Set' if os.getenv('AWS_REGION') else '✗ Missing'}")
-print(f"  - S3_BUCKET_NAME: {'✓ Set' if os.getenv('S3_BUCKET_NAME') else '✗ Missing'}")
-print("")
-print("To create a PERSISTENT secret, go to https://modal.com/secrets")
-print("and create a secret named 'ai-podcast-clipper-secret' with these keys.")
+
+def load_secret_values():
+    load_dotenv(ENV_PATH)
+
+    values = {
+        secret_key: os.getenv(env_key)
+        for secret_key, env_key in SECRET_KEYS.items()
+    }
+    missing = [key for key, value in values.items() if not value]
+
+    if missing:
+        missing_list = ", ".join(missing)
+        raise SystemExit(
+            f"Missing required values for Modal secret: {missing_list}. "
+            f"Fill {ENV_PATH} before running this script."
+        )
+
+    return values
+
+
+def main():
+    values = load_secret_values()
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".json",
+        delete=False,
+    ) as temp_file:
+        json.dump(values, temp_file)
+        temp_file_path = temp_file.name
+
+    try:
+        subprocess.run(
+            [
+                "modal",
+                "secret",
+                "create",
+                "--force",
+                "--from-json",
+                temp_file_path,
+                SECRET_NAME,
+            ],
+            check=True,
+        )
+    finally:
+        pathlib.Path(temp_file_path).unlink(missing_ok=True)
+
+    print(f"Created or updated Modal secret: {SECRET_NAME}")
+    print("Loaded keys:")
+    for key in values:
+        print(f"  - {key}: set")
+
+
+if __name__ == "__main__":
+    main()

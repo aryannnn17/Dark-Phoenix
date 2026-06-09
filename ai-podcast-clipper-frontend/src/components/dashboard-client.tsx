@@ -12,9 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from "./ui/card";
-import { Loader2, UploadCloud } from "lucide-react";
-import { useState } from "react";
-import { generateUploadUrl } from "~/actions/s3";
+import { Loader2, UploadCloud, Youtube } from "lucide-react";
+import { type FormEvent, useState } from "react";
+import { createYoutubeIngestionJob, generateUploadUrl } from "~/actions/s3";
 import { toast } from "sonner";
 import { processVideo } from "~/actions/generation";
 import {
@@ -28,6 +28,8 @@ import {
 import { Badge } from "./ui/badge";
 import { useRouter } from "next/navigation";
 import { ClipDisplay } from "./clip-display";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 export function DashboardClient({
   uploadedFiles,
@@ -38,6 +40,10 @@ export function DashboardClient({
     s3Key: string;
     filename: string;
     status: string;
+    sourceType: string;
+    sourceUrl: string | null;
+    youtubeVideoId: string | null;
+    errorMessage: string | null;
     clipsCount: number;
     createdAt: Date;
   }[];
@@ -45,6 +51,8 @@ export function DashboardClient({
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [submittingYoutube, setSubmittingYoutube] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
@@ -92,13 +100,43 @@ export function DashboardClient({
           "Your video has been scheduled for processing. Check the status below.",
         duration: 5000,
       });
-    } catch (error) {
+    } catch {
       toast.error("Upload failed", {
         description:
           "There was a problem uploading your video. Please try again.",
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleYoutubeSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!youtubeUrl.trim()) return;
+
+    setSubmittingYoutube(true);
+
+    try {
+      const { uploadedFileId, videoId } =
+        await createYoutubeIngestionJob(youtubeUrl);
+
+      await processVideo(uploadedFileId);
+      setYoutubeUrl("");
+
+      toast.success("YouTube video scheduled", {
+        description: `${videoId} has been sent to the processing queue.`,
+        duration: 5000,
+      });
+      router.refresh();
+    } catch (error) {
+      toast.error("YouTube submission failed", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "There was a problem scheduling this YouTube video.",
+      });
+    } finally {
+      setSubmittingYoutube(false);
     }
   };
 
@@ -133,6 +171,39 @@ export function DashboardClient({
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <form
+                className="mb-8 space-y-3 border-b pb-8"
+                onSubmit={handleYoutubeSubmit}
+              >
+                <Label htmlFor="youtube-url">YouTube URL</Label>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Input
+                    id="youtube-url"
+                    type="url"
+                    value={youtubeUrl}
+                    onChange={(event) => setYoutubeUrl(event.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=YRvf00NooN8"
+                    disabled={submittingYoutube}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={!youtubeUrl.trim() || submittingYoutube}
+                  >
+                    {submittingYoutube ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Scheduling...
+                      </>
+                    ) : (
+                      <>
+                        <Youtube className="mr-2 h-4 w-4" />
+                        Generate Clips
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+
               <Dropzone
                 onDrop={handleDrop}
                 accept={{ "video/mp4": [".mp4"] }}
@@ -140,7 +211,7 @@ export function DashboardClient({
                 disabled={uploading}
                 maxFiles={1}
               >
-                {(dropzone: DropzoneState) => (
+                {(_dropzone: DropzoneState) => (
                   <>
                     <div className="flex flex-col items-center justify-center space-y-4 rounded-lg p-10 text-center">
                       <UploadCloud className="text-muted-foreground h-12 w-12" />
@@ -210,6 +281,7 @@ export function DashboardClient({
                       <TableHeader>
                         <TableRow>
                           <TableHead>File</TableHead>
+                          <TableHead>Source</TableHead>
                           <TableHead>Uploaded</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Clips created</TableHead>
@@ -220,6 +292,21 @@ export function DashboardClient({
                           <TableRow key={item.id}>
                             <TableCell className="max-w-xs truncate font-medium">
                               {item.filename}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground max-w-[180px] truncate text-sm">
+                              {item.sourceType === "youtube" &&
+                              item.sourceUrl ? (
+                                <a
+                                  href={item.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline underline-offset-2"
+                                >
+                                  {item.youtubeVideoId ?? "YouTube"}
+                                </a>
+                              ) : (
+                                "Upload"
+                              )}
                             </TableCell>
                             <TableCell className="text-muted-foreground text-sm">
                               {new Date(item.createdAt).toLocaleDateString()}
@@ -238,7 +325,12 @@ export function DashboardClient({
                                 <Badge variant="destructive">No credits</Badge>
                               )}
                               {item.status === "failed" && (
-                                <Badge variant="destructive">Failed</Badge>
+                                <Badge
+                                  variant="destructive"
+                                  title={item.errorMessage ?? undefined}
+                                >
+                                  Failed
+                                </Badge>
                               )}
                             </TableCell>
                             <TableCell>

@@ -6,6 +6,11 @@ import { useEffect, useState } from "react";
 import { getClipPlayUrl } from "~/actions/generation";
 import { Button } from "./ui/button";
 
+function formatDuration(seconds?: number | null) {
+  if (seconds == null) return null;
+  return `${Math.round(seconds)}s`;
+}
+
 function ClipCard({ clip }: { clip: Clip }) {
   const [playUrl, setPlayUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
@@ -19,7 +24,7 @@ function ClipCard({ clip }: { clip: Clip }) {
         } else if (result.error) {
           console.error("Failed to get play url: " + result.error);
         }
-      } catch (error) {
+      } catch {
       } finally {
         setIsLoadingUrl(false);
       }
@@ -41,7 +46,7 @@ function ClipCard({ clip }: { clip: Clip }) {
 
   return (
     <div className="flex max-w-52 flex-col gap-2">
-      <div className="bg-muted">
+      <div className="bg-muted aspect-[9/16] overflow-hidden rounded-md">
         {isLoadingUrl ? (
           <div className="flex h-full w-full items-center justify-center">
             <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
@@ -60,6 +65,15 @@ function ClipCard({ clip }: { clip: Clip }) {
         )}
       </div>
       <div className="flex flex-col gap-2">
+        <div className="min-h-9 text-xs">
+          <p className="truncate font-medium">
+            {clip.filename ?? clip.s3Key.split("/").pop() ?? "Clip"}
+          </p>
+          <p className="text-muted-foreground">
+            {formatDuration(clip.duration) ?? "Duration pending"}
+            {clip.watermarkPresent ? " - Watermarked" : ""}
+          </p>
+        </div>
         <Button onClick={handleDownload} variant="outline" size="sm">
           <Download className="mr-1.5 h-4 w-4" />
           Download
