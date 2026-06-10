@@ -13,7 +13,7 @@ Fill these after deployment:
 | --- | --- |
 | Frontend URL | `https://dark-phoenix-beryl.vercel.app` |
 | Modal endpoint | `https://aryannnn17--ai-podcast-clipper-aipodcastclipper-process-video.modal.run` |
-| Google Drive folder | `TODO: upload delivery/YRvf00NooN8 and paste Drive link` |
+| Google Drive folder | `https://drive.google.com/drive/folders/1AqeLey603GhK97pTUZj285sX9zGNSDyk?usp=sharing` |
 | Submitted tag | `submitted` |
 
 ## Environment Variables

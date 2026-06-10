@@ -100,8 +100,9 @@ overlay.
 
 ## What Still Needs Work
 
-- The final Google Drive upload/link must be completed manually from
-  `delivery/YRvf00NooN8` and pasted into `DEPLOYMENT.md` before submission.
+- Final clips, manifest, and screenshots were uploaded to Google Drive for
+  review:
+  `https://drive.google.com/drive/folders/1AqeLey603GhK97pTUZj285sX9zGNSDyk?usp=sharing`.
 - Inngest Cloud should be manually synced to
   `https://dark-phoenix-beryl.vercel.app/api/inngest` if it does not
   automatically discover the deployed function.
@@ -116,7 +117,7 @@ overlay.
   transcribing, selecting moments, rendering, and uploading.
 - The dashboard uses manual refresh. A production reviewer experience would
   benefit from polling or realtime job updates.
-- Google Drive delivery is documented as a final handoff step. A future version
+- Google Drive delivery is currently a manual handoff step. A future version
   could automate Drive upload with a service account after clips are generated.
 
 ## Final Submission Checklist
@@ -133,7 +134,7 @@ Current status before emailing LUNARTECH:
   49-50 seconds long.
 - A sampled contact sheet confirms burned-in captions and the
   `LUNARTECH.AI` watermark.
-- Remaining manual steps: upload `delivery/YRvf00NooN8` to Google Drive, share
-  with `tk.lunartech@gmail.com`, paste the Drive link into `DEPLOYMENT.md`,
-  and sync Inngest Cloud to the deployed `/api/inngest` endpoint if it has not
-  already synced.
+- Final Drive delivery is available at
+  `https://drive.google.com/drive/folders/1AqeLey603GhK97pTUZj285sX9zGNSDyk?usp=sharing`.
+- Remaining manual check: confirm Inngest Cloud is synced to the deployed
+  `/api/inngest` endpoint if it has not already synced automatically.
