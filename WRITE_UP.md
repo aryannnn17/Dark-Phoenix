@@ -13,9 +13,10 @@ This submission keeps that path and adds a production YouTube path:
   `UploadedFile` record, reserves a UUID-backed `original.mp4` S3 key, and
   sends the existing Inngest event.
 - Inngest passes the source URL and video ID to the existing Modal endpoint.
-- Modal downloads the YouTube video with `yt-dlp`, uploads the source MP4 to
-  the reserved S3 key, then runs the existing WhisperX, Gemini, ASD, ffmpeg,
-  and S3 upload pipeline.
+- Modal attempts to download the YouTube video with `yt-dlp`, uploads the
+  source MP4 to the reserved S3 key, then runs the existing WhisperX, Gemini,
+  ASD, ffmpeg, and S3 upload pipeline. If YouTube blocks the cloud runtime, the
+  backend falls back to the reserved S3 source object.
 - Final clips are named with the assignment format when a YouTube video ID is
   available.
 - Modal uploads `clips_manifest.json` beside the clips in S3.
@@ -27,6 +28,10 @@ This submission keeps that path and adds a production YouTube path:
   when Stripe is not configured and reviewer credits can be seeded directly.
 - `scripts/download_delivery_artifacts.py` downloads the S3 manifest and final
   MP4s into a local Google Drive handoff folder.
+- The Modal backend now has a center-crop vertical fallback when TalkNet model
+  assets are unavailable or ASD tracks/scores are not produced.
+- Gemini calls now use a bounded request configuration and the backend can
+  generate deterministic transcript-window fallback moments.
 
 ## Deployment Stack
 
@@ -56,7 +61,7 @@ stores:
 - processing status and error detail
 
 The Modal backend receives the URL through the normal Inngest processing
-request. It downloads with:
+request. It attempts to download with:
 
 ```bash
 yt-dlp --no-playlist --max-filesize 2500M \
@@ -68,6 +73,18 @@ yt-dlp --no-playlist --max-filesize 2500M \
 
 After download, Modal uploads that file to the reserved S3 key and continues
 with the existing processing flow.
+
+During the final delivery run, YouTube returned a bot/auth challenge from the
+Modal runtime. The assigned video was downloaded locally with browser cookies,
+uploaded to the reserved S3 source key, and then processed by the deployed Modal
+backend from S3:
+
+```text
+s3://dark-phoenix-aryan17/84d57932-56c6-4b5d-84d5-b503cd412095/original.mp4
+```
+
+That run generated five final MP4 clips and `clips_manifest.json` under the
+same S3 prefix.
 
 ## Watermarking
 
@@ -83,12 +100,17 @@ overlay.
 
 ## What Still Needs Work
 
-- Real cloud credentials are required to complete deployment, process the
-  assigned video, upload final clips to Google Drive, and fill the final URLs in
-  `DEPLOYMENT.md`.
+- The final Google Drive upload/link must be completed manually from
+  `delivery/YRvf00NooN8` and pasted into `DEPLOYMENT.md` before submission.
+- Inngest Cloud should be manually synced to
+  `https://dark-phoenix-beryl.vercel.app/api/inngest` if it does not
+  automatically discover the deployed function.
 - Clip moment quality still depends on Gemini's JSON response and the source
-  transcript quality. A production version should add stricter JSON validation
-  and a fallback moment-selection strategy.
+  transcript quality. The delivered run used deterministic transcript-window
+  fallback moments to avoid Gemini latency/flakiness during final rendering.
+- TalkNet model weights were not available in the repo/runtime, so delivered
+  clips used the center-crop vertical fallback instead of active-speaker
+  reframing.
 - Job status could be more granular. Today the UI shows queued, processing,
   processed, no credits, and failed; a fuller product would expose downloading,
   transcribing, selecting moments, rendering, and uploading.
@@ -99,16 +121,19 @@ overlay.
 
 ## Final Submission Checklist
 
-Before emailing LUNARTECH:
+Current status before emailing LUNARTECH:
 
-- Deploy Vercel and Modal.
-- Apply the Prisma schema to the deployed Postgres database.
-- Configure S3 CORS for the final frontend domain.
-- Confirm Inngest can reach `/api/inngest`.
-- Seed or create a reviewer account with enough credits.
-- Process `https://www.youtube.com/watch?v=YRvf00NooN8`.
-- Verify at least three final clips are vertical, captioned, playable, and
-  watermarked.
-- Upload clips, screenshots, and `clips_manifest.json` to Google Drive.
-- Share the private GitHub repo and Drive folder with `tk.lunartech@gmail.com`.
-- Tag the exact commit as `submitted`.
+- Vercel frontend is deployed at `https://dark-phoenix-beryl.vercel.app`.
+- Modal backend is deployed at
+  `https://aryannnn17--ai-podcast-clipper-aipodcastclipper-process-video.modal.run`.
+- The assigned video has been processed through the deployed Modal backend.
+- Five final clips were generated in S3 and downloaded to
+  `delivery/YRvf00NooN8`.
+- Each MP4 was verified with `ffprobe` as 1080x1920 vertical and roughly
+  49-50 seconds long.
+- A sampled contact sheet confirms burned-in captions and the
+  `LUNARTECH.AI` watermark.
+- Remaining manual steps: upload `delivery/YRvf00NooN8` to Google Drive, share
+  with `tk.lunartech@gmail.com`, paste the Drive link into `DEPLOYMENT.md`,
+  and sync Inngest Cloud to the deployed `/api/inngest` endpoint if it has not
+  already synced.

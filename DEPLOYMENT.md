@@ -13,7 +13,7 @@ Fill these after deployment:
 | --- | --- |
 | Frontend URL | `https://dark-phoenix-beryl.vercel.app` |
 | Modal endpoint | `https://aryannnn17--ai-podcast-clipper-aipodcastclipper-process-video.modal.run` |
-| Google Drive folder | `https://drive.google.com/...` |
+| Google Drive folder | `TODO: upload delivery/YRvf00NooN8 and paste Drive link` |
 | Submitted tag | `submitted` |
 
 ## Environment Variables
@@ -111,9 +111,23 @@ curl -X POST "$PROCESS_VIDEO_ENDPOINT" \
 ```
 
 For YouTube jobs, the frontend sends `source_url` and `source_video_id` to
-Modal through Inngest. Modal downloads the video with `yt-dlp`, uploads it to
-the reserved `original.mp4` S3 key, then runs transcription, moment selection,
-reframing, captions, watermarking, clip upload, and manifest upload.
+Modal through Inngest. Modal attempts to download the video with `yt-dlp`,
+uploads it to the reserved `original.mp4` S3 key, then runs transcription,
+moment selection, reframing, captions, watermarking, clip upload, and manifest
+upload.
+
+YouTube currently blocks the deployed Modal environment for the assigned video
+with a bot/auth challenge. To keep the deployed processing path reviewable, the
+backend falls back to the reserved S3 `original.mp4` object when a YouTube
+download fails. For the delivered run, the source was downloaded locally with
+browser cookies and uploaded to:
+
+```text
+s3://dark-phoenix-aryan17/84d57932-56c6-4b5d-84d5-b503cd412095/original.mp4
+```
+
+The Modal backend then processed that S3 source through the same transcription,
+rendering, caption, watermark, upload, and manifest path.
 
 ## Inngest
 
@@ -123,6 +137,16 @@ reframing, captions, watermarking, clip upload, and manifest upload.
 3. Verify Inngest can reach `https://YOUR_PROJECT.vercel.app/api/inngest`.
 4. Keep the per-user concurrency limit at `1`.
 5. Trigger a test job and verify the run history reaches the Modal step.
+
+The deployed Vercel endpoint has been verified at:
+
+```text
+https://dark-phoenix-beryl.vercel.app/api/inngest
+```
+
+It reports cloud mode with one registered function and both Inngest keys
+present. If Inngest Cloud is not yet dispatching jobs, manually sync this URL
+from the Inngest dashboard.
 
 ## Frontend
 
@@ -169,6 +193,32 @@ python scripts/download_delivery_artifacts.py --prefix S3_JOB_FOLDER_PREFIX
 9. Share the Drive folder with `tk.lunartech@gmail.com` or set it to
    "Anyone with the link can view".
 
+Verified delivery artifacts were generated under this S3 prefix:
+
+```text
+84d57932-56c6-4b5d-84d5-b503cd412095/
+```
+
+The local Drive-ready folder is:
+
+```text
+delivery/YRvf00NooN8
+```
+
+It contains:
+
+- `clips_manifest.json`
+- `dark-phoenix_YRvf00NooN8_clip_01_lunartech.mp4`
+- `dark-phoenix_YRvf00NooN8_clip_02_lunartech.mp4`
+- `dark-phoenix_YRvf00NooN8_clip_03_lunartech.mp4`
+- `dark-phoenix_YRvf00NooN8_clip_04_lunartech.mp4`
+- `dark-phoenix_YRvf00NooN8_clip_05_lunartech.mp4`
+- `screenshots/contact_sheet.jpg`
+
+Each MP4 was verified locally with `ffprobe` as 1080x1920 vertical video,
+roughly 49-50 seconds long. A sampled frame contact sheet confirms the
+upper-right `LUNARTECH.AI` watermark and burned-in captions.
+
 ## Watermark Implementation
 
 The watermark is burned into the final MP4 in
@@ -187,7 +237,12 @@ a web-player overlay.
 - Deployment requires real Vercel, Modal, AWS, Supabase, Gemini, Inngest, and
   Stripe test credentials.
 - YouTube availability can change. If `YRvf00NooN8` becomes unavailable,
-  record the exact `yt-dlp` error and demonstrate the same pipeline on a
-  comparable fallback video.
+  record the exact `yt-dlp` error. The backend supports a deployed S3 fallback
+  for the reserved source object when YouTube blocks server-side download.
+- TalkNet model weights were not available in the submitted repo, so the Modal
+  backend falls back to deterministic center-crop vertical reframing when ASD
+  tracks/scores are missing.
+- Gemini moment selection is attempted with bounded request settings. The
+  backend also supports fallback transcript-window moments for reliability.
 - Billing can use Stripe test mode, or the reviewer account can be seeded with
   credits directly and documented in the submission email.

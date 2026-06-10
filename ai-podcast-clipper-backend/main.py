@@ -16,6 +16,7 @@ import numpy as np
 from pydantic import BaseModel
 import os
 from google import genai
+from google.genai import types
 from typing import Optional
 
 import pysubs2
@@ -27,6 +28,7 @@ class ProcessVideoRequest(BaseModel):
     s3_key: str
     source_url: Optional[str] = None
     source_video_id: Optional[str] = None
+    force_fallback_moments: bool = False
 
 
 image = (
@@ -49,10 +51,12 @@ image = (
         "build-essential",
         "gcc",
         "git",
+        "nodejs",
     ])
     .pip_install("pip<25", "setuptools<70", "wheel")
     .pip_install_from_requirements("requirements.txt")
     .run_commands([
+        "ln -sf /usr/bin/nodejs /usr/local/bin/node",
         "mkdir -p /usr/share/fonts/truetype/custom",
         "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
         "fc-cache -f -v",
@@ -87,6 +91,10 @@ def download_youtube_video(source_url: str, output_path: pathlib.Path):
     print(f"Downloading YouTube source: {source_url}")
     command = [
         "yt-dlp",
+        "--js-runtimes",
+        "node",
+        "--remote-components",
+        "ejs:github",
         "--no-playlist",
         "--max-filesize",
         "2500M",
@@ -210,6 +218,31 @@ def create_vertical_video(tracks, scores, pyframes_path, pyavi_path, audio_path,
                       f"-c:v h264 -preset fast -crf 23 -c:a aac -b:a 128k "
                       f"{output_path}")
     subprocess.run(ffmpeg_command, shell=True, check=True, text=True)
+
+
+def create_center_crop_vertical_video(input_path: str, output_path: str, start_time: float | None = None, end_time: float | None = None):
+    video_filter = (
+        "scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920"
+    )
+    ffmpeg_cmd = ["ffmpeg", "-y"]
+    if start_time is not None:
+        ffmpeg_cmd.extend(["-ss", str(start_time)])
+    if end_time is not None:
+        ffmpeg_cmd.extend(["-to", str(end_time)])
+    ffmpeg_cmd.extend([
+        "-i", str(input_path),
+        "-vf", video_filter,
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        str(output_path),
+    ])
+    subprocess.run(ffmpeg_cmd, check=True)
 
 
 def create_subtitles_with_ffmpeg(transcript_segments: list, clip_start: float, clip_end: float, clip_video_path: str, output_path: str, max_words: int = 5):
@@ -345,10 +378,18 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     pyavi_path.mkdir(exist_ok=True)
 
     duration = end_time - start_time
-    cut_command = (f"ffmpeg -i {original_video_path} -ss {start_time} -t {duration} "
-                   f"{clip_segment_path}")
-    subprocess.run(cut_command, shell=True, check=True,
-                   capture_output=True, text=True)
+    cut_command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(original_video_path),
+        "-ss",
+        str(start_time),
+        "-t",
+        str(duration),
+        str(clip_segment_path),
+    ]
+    subprocess.run(cut_command, check=True, capture_output=True, text=True)
 
     extract_cmd = f"ffmpeg -i {clip_segment_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
     subprocess.run(extract_cmd, shell=True,
@@ -369,21 +410,24 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     tracks_path = clip_dir / "pywork" / "tracks.pckl"
     scores_path = clip_dir / "pywork" / "scores.pckl"
     if not tracks_path.exists() or not scores_path.exists():
-        raise FileNotFoundError("Tracks or scores not found for clip")
+        print("Tracks or scores not found; using center-crop vertical fallback")
+        create_center_crop_vertical_video(
+            original_video_path, vertical_mp4_path, start_time, end_time
+        )
+    else:
+        with open(tracks_path, "rb") as f:
+            tracks = pickle.load(f)
 
-    with open(tracks_path, "rb") as f:
-        tracks = pickle.load(f)
+        with open(scores_path, "rb") as f:
+            scores = pickle.load(f)
 
-    with open(scores_path, "rb") as f:
-        scores = pickle.load(f)
-
-    cvv_start_time = time.time()
-    create_vertical_video(
-        tracks, scores, pyframes_path, pyavi_path, audio_path, vertical_mp4_path
-    )
-    cvv_end_time = time.time()
-    print(
-        f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds")
+        cvv_start_time = time.time()
+        create_vertical_video(
+            tracks, scores, pyframes_path, pyavi_path, audio_path, vertical_mp4_path
+        )
+        cvv_end_time = time.time()
+        print(
+            f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds")
 
     create_subtitles_with_ffmpeg(transcript_segments, start_time,
                                  end_time, vertical_mp4_path, subtitle_output_path, max_words=5)
@@ -466,8 +510,8 @@ class AiPodcastClipper:
 
         return json.dumps(segments)
 
-    def identify_moments(self, transcript: dict):
-        response = self.gemini_client.models.generate_content(model="gemini-3-flash-preview", contents="""
+    def identify_moments(self, transcript: list):
+        prompt = """
     This is a podcast video transcript consisting of word, along with each words's start and end time. I am looking to create clips between a minimum of 30 and maximum of 60 seconds long. The clip should never exceed 60 seconds.
 
     Your task is to find and extract stories, or question and their corresponding answers from the transcript.
@@ -487,15 +531,99 @@ class AiPodcastClipper:
 
     If there are no valid clips to extract, the output should be an empty list [], in JSON format. Also readable by json.loads() in Python.
 
-    The transcript is as follows:\n\n""" + str(transcript))
-        print(f"Identified moments response: ${response.text}")
-        return response.text
+    The transcript is as follows:\n\n""" + str(transcript)
+
+        configured_model = os.getenv("GEMINI_MODEL")
+        models_to_try = [
+            configured_model,
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-3-flash-preview",
+        ]
+        models_to_try = list(dict.fromkeys(model for model in models_to_try if model))
+
+        for model in models_to_try:
+            for attempt in range(3):
+                try:
+                    response = self.gemini_client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            httpOptions=types.HttpOptions(timeout=60000),
+                            maxOutputTokens=1024,
+                            responseMimeType="application/json",
+                        ),
+                    )
+                    print(f"Identified moments response from {model}: ${response.text}")
+                    return response.text
+                except Exception as error:
+                    wait_seconds = 5 * (attempt + 1)
+                    print(
+                        f"Gemini model {model} failed on attempt {attempt + 1}: {error}"
+                    )
+                    if attempt < 2:
+                        time.sleep(wait_seconds)
+
+        fallback = self.build_fallback_moments(transcript)
+        print(f"Using fallback clip moments: {fallback}")
+        return json.dumps(fallback)
+
+    def build_fallback_moments(self, transcript: list):
+        timed_words = [
+            segment
+            for segment in transcript
+            if segment.get("start") is not None and segment.get("end") is not None
+        ]
+        if not timed_words:
+            return []
+
+        first_start = float(timed_words[0]["start"])
+        last_end = float(timed_words[-1]["end"])
+        total_duration = max(last_end - first_start, 0)
+        if total_duration < 35:
+            return []
+
+        target_duration = 50.0
+        anchors = [0.18, 0.42, 0.66, 0.78, 0.9]
+        moments = []
+        last_clip_end = first_start
+
+        for anchor in anchors:
+            if len(moments) >= 5:
+                break
+
+            desired_start = first_start + (total_duration * anchor)
+            desired_start = max(desired_start, last_clip_end + 3)
+            start_word = next(
+                (word for word in timed_words if float(word["start"]) >= desired_start),
+                None,
+            )
+            if not start_word:
+                continue
+
+            start = float(start_word["start"])
+            desired_end = min(start + target_duration, last_end)
+            end_candidates = [
+                word
+                for word in timed_words
+                if start + 30 <= float(word["end"]) <= desired_end
+            ]
+            if not end_candidates:
+                continue
+
+            end = float(end_candidates[-1]["end"])
+            if 30 <= end - start <= 60:
+                moments.append({"start": start, "end": end})
+                last_clip_end = end
+
+        return moments
 
     @modal.fastapi_endpoint(method="POST")
     def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
         s3_key = request.s3_key
         source_url = request.source_url
         source_video_id = request.source_video_id
+        force_fallback_moments = request.force_fallback_moments
 
         if token.credentials != os.environ["AUTH_TOKEN"]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
@@ -511,9 +639,16 @@ class AiPodcastClipper:
             bucket_name = os.environ["S3_BUCKET_NAME"]
 
             if source_url:
-                download_youtube_video(source_url, video_path)
-                s3_client.upload_file(str(video_path), bucket_name, s3_key)
-                print(f"Uploaded YouTube source to s3://{bucket_name}/{s3_key}")
+                try:
+                    download_youtube_video(source_url, video_path)
+                    s3_client.upload_file(str(video_path), bucket_name, s3_key)
+                    print(f"Uploaded YouTube source to s3://{bucket_name}/{s3_key}")
+                except Exception as error:
+                    print(
+                        "YouTube download failed; falling back to existing "
+                        f"S3 source s3://{bucket_name}/{s3_key}: {error}"
+                    )
+                    s3_client.download_file(bucket_name, s3_key, str(video_path))
             else:
                 s3_client.download_file(bucket_name, s3_key, str(video_path))
 
@@ -523,7 +658,13 @@ class AiPodcastClipper:
 
             # 2. Identify moments for clips
             print("Identifying clip moments")
-            identified_moments_raw = self.identify_moments(transcript_segments)
+            if force_fallback_moments or os.getenv("FORCE_FALLBACK_MOMENTS") == "1":
+                identified_moments_raw = json.dumps(
+                    self.build_fallback_moments(transcript_segments)
+                )
+                print(f"Forced fallback clip moments: {identified_moments_raw}")
+            else:
+                identified_moments_raw = self.identify_moments(transcript_segments)
 
             cleaned_json_string = identified_moments_raw.strip()
             if cleaned_json_string.startswith("```json"):
@@ -531,7 +672,11 @@ class AiPodcastClipper:
             if cleaned_json_string.endswith("```"):
                 cleaned_json_string = cleaned_json_string[:-len("```")].strip()
 
-            clip_moments = json.loads(cleaned_json_string)
+            try:
+                clip_moments = json.loads(cleaned_json_string)
+            except json.JSONDecodeError:
+                clip_moments = self.build_fallback_moments(transcript_segments)
+
             if not clip_moments or not isinstance(clip_moments, list):
                 print("Error: Identified moments is not a list")
                 clip_moments = []
